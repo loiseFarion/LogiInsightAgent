@@ -260,6 +260,90 @@ def consultProcedureManual(question: str, WhDocumentPath: str = WhDocumentPath) 
 
     return response
 
+# Tool 5: Search by product
+@tool
+def searchProduct(question: str, identifier: str, df: pd.DataFrame) -> str:
+    """
+    Utilize esta ferramenta sempre que o usuário solicitar informações sobre um produto específico do estoque, 
+    identificando-o por:
+    - SKU (ex.: SKU-1234)
+    - Código EAN com 13 dígitos
+    - Nome ou descrição do produto (ex.: Protetor Solar)
+
+    A ferramenta retorna uma ficha detalhada e legível do item encontrado, contendo
+    as informações disponíveis no estoque, como produto, SKU, categoria, quantidade,
+    localização, status, fornecedor, data de entrada, custo, preço de venda e peso.
+
+    Não utilize esta ferramenta para consultas gerais, rankings ou análises de múltiplos produtos. Para esses 
+    casos, utilize as ferramentas de análise de estoque apropriadas.
+    """
+ 
+    identifier = str(identifier).strip()
+
+    if identifier.upper().startswith("SKU"):
+        result = df[df["sku"].astype(str).str.upper() == identifier.upper()]
+    elif identifier.replace("-", "").isdigit() and len(identifier.replace("-", "")) == 13:
+        result = df[df["codigo_ean"].astype(str) == identifier]
+    else:
+        result = df[df["produto"].str.contains(identifier, case=False, na=False)]
+
+    if result.empty:
+        return f"Nenhum item encontrado para o identificador '{identifier}'."
+
+    if len(result) > 1:
+        opcoes = ", ".join(result["sku"].astype(str).tolist())
+        return f"Encontrei {len(result)} itens para '{identifier}': {opcoes}. Especifique o SKU para ver a ficha completa."
+ 
+    item = result.iloc[0]
+    dataItem = item.to_dict()
+
+    context = "\n".join(
+        f"{campo}: {valor}"
+        for campo, valor in dataItem.items()
+    )
+ 
+    template_response = PromptTemplate(
+            template="""
+            Você é um analista de dados especializado em gestão de estoque de um centro de distribuição. 
+            Sua função é identificar um produto específico na base de dados do estoque a partir de uma 
+            {question} feita pelo usuário.
+                        
+            A seguir, você encontrará o filtro a ser usado para identificar o produto e a ficha detalhada do item encontrado:
+    
+            ================= FILTRO =================
+    
+            {identifier}
+    
+            ========= INFORMAÇÕES DO PRODUTO =========
+
+            {item}
+
+            ============================================================
+            Caso nenhum produto seja encontrado pelo filtro, informe claramente ao usuário que o produto solicitado não foi 
+            localizado na base de dados. Não invente, suponha ou utilize informações de outros produtos para elaborar uma 
+            resposta. 
+            
+            Quando um produto for encontrado, com base nesse filtro e nos dados do item encontrado, elabore uma ficha detalhada 
+            com linguagem clara, acessível e fluida, destacando os dados dos resultados:
+
+            Inclua:
+            1. Um título: ## Códgio SKU - Nome Produto - Categoria
+            2. Uma visão geral das informações do produto.
+            3. Uma seção para cada informação disponível nos resultados. Para cada campo, apresente o valor encontrado e 
+               explique brevemente o que essa informação representa para a gestão do estoque. Interprete o dado de forma 
+               objetiva.
+            4. Destaque informações relevantes para a operação, como quantidade disponível, status do estoque, localização,
+               fornecedor, custo unitário e preço de venda.
+
+            """,
+            input_variables=["question", "identifier", "item"]
+        )
+    
+    cadeia = template_response | llm | StrOutputParser()
+    response = cadeia.invoke({"question": question, "identifier": identifier, "item": context})
+
+    return response
+
 # Function to create the agent tools
 def criar_ferramentas(df):
     dataframeInformationtool = Tool(
@@ -319,11 +403,28 @@ def criar_ferramentas(df):
                     SKUs específicos ou gráficos — nesses casos, use as ferramentas apropriadas.
                     """,
         return_direct=True)
+
+    productFindTool = Tool(
+        name="Localizar Produto",
+        func=lambda question, identifier: searchProduct.run({"question": question, "identifier": identifier, "df": df}),
+        description="""
+                    Utilize esta ferramenta sempre que o usuário quiser localizar um produto específico no estoque, fornecendo
+                    um identificador como SKU, código EAN ou nome do produto. Exemplos de uso: "Quais são os dados do SKU-1020?",
+                    "Onde está o produto com EAN 7891234567890?", "Qual é o fornecedor do Protetor Solar?" A ferramenta recebe
+                    a pergunta do usuário e o identificador do produto, localiza o item correspondente na base de estoque e retorna 
+                    suas informações. Se o produto não for encontrado, informe que ele não foi localizado na base de dados. 
+                    Não utilize informações de outros produtos para responder à solicitação. Não utilize esta ferramenta para 
+                    consultas que envolvam múltiplos produtos, análises gerais de estoque, estatísticas, rankings ou geração 
+                    de gráficos.
+                    """,
+        return_direct=True)
+
     
     return [
         dataframeInformationtool,
         statisticalSummaryTool,
         generateGraphTool,
         pythonCodeTool,
-        procedureManualTool
+        procedureManualTool,
+        productFindTool
     ]
