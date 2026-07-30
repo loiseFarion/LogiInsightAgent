@@ -200,6 +200,66 @@ def chartGenerator(question: str, df: pd.DataFrame) -> str:
 
     return ""
 
+# Tool 4: Consult the Procedures Manual (RAG on the PDF)
+@st.cache_resource(show_spinner="Indexando o manual de procedimentos...")
+def loadManualProcedureBase(WhDocumentPath: str = WhDocumentPath):
+    """
+    Carrega o PDF do manual, divide em pedaços (chunks) e cria o índice vetorial (FAISS).
+    Fica em cache por caminho de arquivo, então cada PDF diferente (o padrão do projeto ou um
+    enviado pelo usuário) só é processado uma vez.
+    """
+
+    loader = PyPDFLoader(WhDocumentPath)
+    pages = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    chunks = splitter.split_documents(pages)
+
+    # Local embeddings using Ollama
+    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
+    vectorstore = FAISS.from_documents(chunks,embeddings)
+    return vectorstore
+
+def consultProcedureManual(question: str, WhDocumentPath: str = WhDocumentPath) -> str:
+    """
+    Busca no manual de procedimentos os trechos mais relevantes para a pergunta e usa o LLM
+    para responder com base apenas nesses trechos (RAG).
+    """
+
+    vectorstore = loadManualProcedureBase(WhDocumentPath)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+    relevantDocuments = retriever.invoke(question)
+    context = "\n\n---\n\n".join([doc.page_content for doc in relevantDocuments])
+
+    template_response = PromptTemplate(
+        template="""
+        Você é um assistente especializado no Manual de Procedimentos Operacionais do centro de
+        distribuição LogiInsight. Responda à pergunta do usuário utilizando SOMENTE as informações
+        do trecho do manual fornecido abaixo. Se a resposta não estiver no trecho fornecido, diga
+        claramente que a informação não foi encontrada no manual.
+
+        ================= TRECHO DO MANUAL =================
+        {context}
+        ======================================================
+
+        Pergunta: {question}
+
+        Responda de forma clara e direta, em português. Se a resposta envolver uma situação de
+        exceção (ex: "o que fazer se..."), destaque a ação esperada e o responsável pela decisão,
+        quando essa informação estiver disponível no trecho.
+        """,
+        input_variables=["context", "question"]
+    )
+
+    cadeia = template_response | llm | StrOutputParser()
+
+    response = cadeia.invoke({
+        "context": context,
+        "question": question
+    })
+
+    return response
+
 # Function to create the agent tools
 def criar_ferramentas(df):
     dataframeInformationtool = Tool(
@@ -235,9 +295,35 @@ def criar_ferramentas(df):
                     a distribuição', 'represente graficamente', entre outros.
                     """,
         return_direct=True)
+
+    pythonCodeTool = Tool(
+        name="Códigos Python",
+        func=PythonAstREPLTool(locals={"df": df}),
+        description="""
+                    Utilize esta ferramenta sempre que o usuário solicitar cálculos, consultas ou transformações específicas
+                    usando Python diretamente sobre o DataFrame `df`. Exemplos de uso incluem: "Qual é a média da coluna X?",
+                    "Quais são os valores únicos da coluna Y?", "Qual a correlação entre A e B?". Evite utilizar esta 
+                    ferramenta para solicitações mais amplas ou descritivas, como informações gerais sobre o dataframe, 
+                    resumos estatísticos completos ou geração de gráficos — nesses casos, use as ferramentas apropriadas.
+                    """)
+    
+    procedureManualTool = Tool(
+        name="Manual de Procedimentos",
+        func=lambda question: consultProcedureManual(question, WhDocumentPath),
+        description="""
+                    Utilize esta ferramenta sempre que o usuário perguntar sobre PROCESSOS, REGRAS, FLUXOS ou DECISÕES
+                    operacionais do centro de distribuição. Exemplos de uso incluem: "O que fazer se o código de barras 
+                    estiver ilegível?", "Qual o procedimento de recebimento de mercadorias?", "Quem pode autorizar a 
+                    liberação de um veículo sem conferência completa?", "Como funciona a reserva de pedidos?", "Quais EPIs 
+                    são obrigatórios no setor de picking?". Não utilize esta ferramenta para perguntas sobre quantidades, 
+                    SKUs específicos ou gráficos — nesses casos, use as ferramentas apropriadas.
+                    """,
+        return_direct=True)
     
     return [
         dataframeInformationtool,
         statisticalSummaryTool,
-        generateGraphTool
+        generateGraphTool,
+        pythonCodeTool,
+        procedureManualTool
     ]
