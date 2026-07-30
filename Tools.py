@@ -133,6 +133,73 @@ def statisticalReport(question: str, df: pd.DataFrame) -> str:
 
     return response
 
+# Tool 3: Chart Generator
+@tool
+def chartGenerator(question: str, df: pd.DataFrame) -> str:
+    """
+    Utilize esta ferramenta sempre que o usuário solicitar um gráfico a partir de um DataFrame pandas (`df`) com base em uma instrução do usuário.
+    A instrução pode conter pedidos como: 'Crie um gráfico da quantidade disponível por categoria','Plote a distribuição de peso_kg'
+    ou "Plote a relação entre custo_unitario e preco_venda". Palavras-chave comuns que indicam o uso desta ferramenta incluem:
+    'crie um gráfico', 'plote', 'visualize', 'faça um gráfico de', 'mostre a distribuição', 'represente graficamente', entre outros.
+    """
+
+    columnsInfo = "\n".join([f"- {col} ({dtype})" for col, dtype in df.dtypes.items()])
+    sampleData = df.head(3).to_dict(orient='records')
+
+    template_response = PromptTemplate(
+        template="""
+        Você é um especialista em visualização de dados. Sua tarefa é gerar **apenas o código Python** para plotar um gráfico com base na solicitação do usuário.
+
+        ## Solicitação do usuário:
+        "{question}"
+
+        ## Metadados do DataFrame:
+        {columnsInfo}
+
+        ## Amostra dos dados (3 primeiras linhas):
+        {sampleData}
+
+        ## Instruções obrigatórias:
+        1. Use as bibliotecas `matplotlib.pyplot` (como `plt`) e `seaborn` (como `sns`).
+        2. Defina o tema com `sns.set_theme()`
+        3. Certifique-se de que todas as colunas mencionadas na solicitação existem no DataFrame chamado `df`.
+        4. Escolha o tipo de gráfico adequado conforme a análise solicitada:
+        - **Distribuição de variáveis numéricas**: `histplot`, `kdeplot`, `boxplot` ou `violinplot`
+        - **Distribuição de variáveis categóricas**: `countplot`
+        - **Comparação entre categorias**: `barplot`
+        - **Relação entre variáveis**: `scatterplot` ou `lineplot`
+        - **Séries temporais**: `lineplot`, com o eixo X formatado como datas
+        5. Configure o tamanho do gráfico com `figsize=(8, 4)`.
+        6. Adicione título e rótulos (`labels`) apropriados aos eixos.
+        7. Posicione o título à esquerda com `loc='left'`, deixe o `pad=20` e use `fontsize=14`.
+        8. Mantenha os ticks eixo X sem rotação com `plt.xticks(rotation=0)`
+        9. Remova as bordas superior e direita do gráfico com `sns.despine()`.
+        10. Finalize o código com `plt.show()`.
+
+        Retorne APENAS o código Python, sem nenhum texto adicional ou explicação.
+
+        Código Python:
+        """, input_variables=["question", "columnsInfo", "sampleData"]
+    )
+
+    cadeia = template_response | llm | StrOutputParser()
+    rawCode = cadeia.invoke({
+        "question": question,
+        "columnsInfo": columnsInfo,
+        "sampleData": sampleData
+    })
+
+    cleanCode = rawCode.replace("```python", "").replace("```", "").strip()
+
+    execGlobals = {'df': df, 'plt': plt, 'sns': sns}
+    execLocals = {}
+    exec(cleanCode, execGlobals, execLocals)
+
+    fig = plt.gcf()
+    st.pyplot(fig)
+
+    return ""
+
 # Function to create the agent tools
 def criar_ferramentas(df):
     dataframeInformationtool = Tool(
@@ -156,7 +223,21 @@ def criar_ferramentas(df):
                     """,
         return_direct=True)
 
+    generateGraphTool = Tool(
+        name="Gerar Gráfico",
+        func=lambda question:chartGenerator.run({"question": question, "df": df}),
+        description="""
+                    Utilize esta ferramenta sempre que o usuário solicitar um gráfico a partir de um DataFrame pandas 
+                    (`df`) com base em uma instrução do usuário. A instrução pode conter pedidos como: 'Crie um gráfico
+                    da média de tempo de entrega por clima','Plote a distribuição do tempo de entrega'" ou "Plote a 
+                    relação entre a classificação dos agentes e o tempo de entrega. Palavras-chave comuns que indicam o 
+                    uso desta ferramenta incluem: 'crie um gráfico', 'plote', 'visualize', 'faça um gráfico de', 'mostre 
+                    a distribuição', 'represente graficamente', entre outros.
+                    """,
+        return_direct=True)
+    
     return [
         dataframeInformationtool,
-        statisticalSummaryTool
+        statisticalSummaryTool,
+        generateGraphTool
     ]
