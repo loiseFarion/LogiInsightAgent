@@ -93,6 +93,46 @@ def dataframeInformaion(question: str, df: pd.DataFrame) -> str:
 
     return response
 
+# Tool 2: Statistical report
+@tool
+def statisticalReport(question: str, df: pd.DataFrame) -> str:
+    """
+    Utilize esta ferramenta sempre que o usuário solicitar um resumo estatístico completo e descritivo da base de dados,
+    incluindo várias estatísticas (média, desvio padrão, mínimo, máximo etc.).
+    Não utilize esta ferramenta para calcular uma única métrica como 'qual é a média de X' ou 'qual a correlação das variáveis'.
+    """
+    descriptiveStatistics = df.describe(include='number').transpose().to_string()
+
+    template_response = PromptTemplate(
+        template="""
+        Você é um analista de dados encarregado de interpretar resultados estatísticos da base de estoque
+        de um centro de distribuição, a partir de uma {question} feita pelo usuário.
+
+        A seguir, você encontrará as estatísticas descritivas da base de dados:
+
+        ================= ESTATÍSTICAS DESCRITIVAS =================
+
+        {summary}
+
+        ============================================================
+
+        Com base nesses dados, elabore um resumo explicativo com linguagem clara, acessível e fluida, destacando
+        os principais pontos dos resultados. Inclua:
+
+        1. Um título: ## Relatório de estatísticas descritivas
+        2. Uma visão geral das estatísticas das colunas numéricas
+        3. Um parágrafo sobre cada uma das colunas, comentando informações sobre seus valores.
+        4. Identificação de possíveis outliers com base nos valores mínimo e máximo
+        5. Recomendações de próximos passos na análise com base nos padrões identificados
+        """,
+        input_variables=["question", "summary"]
+    )
+
+    cadeia = template_response | llm | StrOutputParser()
+    response = cadeia.invoke({"question": question, "summary": descriptiveStatistics})
+
+    return response
+
 # Function to create the agent tools
 def criar_ferramentas(df):
     dataframeInformationtool = Tool(
@@ -104,8 +144,19 @@ def criar_ferramentas(df):
                     nulos e duplicados para dar um panomara geral sobre o arquivo.
                     """,
         return_direct=True)
-    
+
+    statisticalSummaryTool = Tool(
+        name="Resumo Estatístico",
+        func=lambda question:statisticalReport.run({"question": question, "df": df}),
+        description="""
+                    Utilize esta ferramenta sempre que o usuário solicitar um resumo estatístico completo e descritivo 
+                    da base de dados, incluindo várias estatísticas (média, desvio padrão, mínimo, máximo etc.) e/ou 
+                    múltiplas colunas numéricas. Não utilize esta ferramenta para calcular uma única métrica como 
+                    'qual é a média de X' ou 'qual a correlação das variáveis'. Para isso, use a ferramenta_python.
+                    """,
+        return_direct=True)
 
     return [
-        dataframeInformationtool
+        dataframeInformationtool,
+        statisticalSummaryTool
     ]
