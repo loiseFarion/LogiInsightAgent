@@ -9,3 +9,5 @@ streamlit==1.44.1
 matplotlib==3.10.1
 seaborn==0.13.2
 python-dotenv==1.0.1
+langchain-ollama==0.2.3
+langchain-text-splitters==0.3.7
