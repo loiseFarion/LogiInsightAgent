@@ -344,6 +344,103 @@ def searchProduct(question: str, identifier: str, df: pd.DataFrame) -> str:
 
     return response
 
+# Tool 6: Analyze Stock
+@tool
+def analyzeStock(question: str, df: pd.DataFrame) -> str:
+    """
+    Utilize esta ferramenta sempre que o usuário fizer perguntas analíticas sobre a saúde ou situação geral 
+    do estoque. Exemplos de uso incluem: "Quais produtos estão com estoque baixo?", "Quantos produtos estão 
+    em situação crítica?", "Qual categoria possui mais itens em estoque?", "Qual é o valor total do estoque?",
+    "Quais produtos representam maior valor financeiro?", "Existe excesso de estoque?".
+
+    Não utilize esta ferramenta para localizar um produto específico por SKU, EAN ou nome e para estatísticas 
+    descritivas genéricas de todas as colunas numéricas.
+    """
+    
+    df["valor_total_item"] = df["quantidade_disponivel"] * df["custo_unitario"]
+
+    # 1. Low stock: available quantity equal to or below the defined minimum
+    lowStock = df[df["quantidade_disponivel"] <= df["estoque_minimo"]]
+    lowStockQuantity = len(lowStock)
+    lowStockList = lowStock[["produto", "sku", "categoria", "quantidade_disponivel", "estoque_minimo"]].to_string(index=False)
+
+    # 2. Critical situation: out of stock available
+    critics = df[df["quantidade_disponivel"] == 0]
+    criticalQuantity = len(critics)
+    criticalList = critics[["produto", "sku", "categoria"]].to_string(index=False)
+
+    # 3. Possible overage: quantity available far above the minimum (adjustable threshold)
+    excess = df[df["quantidade_disponivel"] > 3 * df["estoque_minimo"]]
+    excessQuantity = len(excess)
+    excessList = excess[["produto", "sku", "categoria", "quantidade_disponivel", "estoque_minimo"]].to_string(index=False)
+
+    # 4. Ranking of categories by total quantity in stock
+    rankingCategories = df.groupby("categoria")["quantidade_disponivel"].sum().sort_values(ascending=False).to_string()
+
+    # 5. Total stock value
+    totalStockValue = df["valor_total_item"].sum()
+
+    # 6. Top 10 products by financial value in stock
+    topValue = df.nlargest(10, "valor_total_item")[["produto", "sku", "categoria", "quantidade_disponivel", "custo_unitario", "valor_total_item"]].to_string(index=False)
+
+    template_response = PromptTemplate(
+        template="""
+        Você é um especialista em analista de estoque. Sua função é responder sobre o estoque de um centro de 
+        distribuição a partir de uma {question} feita pelo usuário.
+
+        A seguir estão os dados calculados sobre a situação geral do estoque. Utilize apenas as
+        informações relevantes para a pergunta feita.
+
+        ================= PRODUTOS COM ESTOQUE BAIXO ({lowStockQuantity} itens) =================
+        {lowStockList}
+
+        ================= PRODUTOS EM SITUAÇÃO CRÍTICA - SEM ESTOQUE ({criticalQuantity} itens) =================
+        {criticalList}
+
+        ================= POSSÍVEL EXCESSO DE ESTOQUE ({excessQuantity} itens) =================
+        {excessList}
+
+        ================= RANKING DE CATEGORIAS (quantidade total disponível) =================
+        {rankingCategories}
+
+        ================= VALOR TOTAL DO ESTOQUE =================
+        R$ {totalStockValue:.2f}
+
+        ================= TOP 10 PRODUTOS POR VALOR FINANCEIRO EM ESTOQUE =================
+        {topValue}
+
+        ============================================================
+
+        Com base nesses dados, elabore uma resposta com linguagem clara, objetiva e fluida, incluindo:
+        1. Um título relacionado a pergunta: ## Produtos com estoque baixo.
+        2. A resposta direta à pergunta, citando os produtos e números relevantes.
+        3. Um breve comentário sobre o impacto operacional: risco de ruptura, capital parado, necessidade 
+           de reposição.
+        4. Se a pergunta for genérica por exemplo "como está o estoque?", apresente uma visão geral cobrindo
+           estoque baixo, críticos, excesso e valor total.
+        """,
+
+        input_variables=["question", "lowStockQuantity", "lowStockList", "criticalQuantity", "criticalList", "excessQuantity", "excessList", "rankingCategories", "totalStockValue", "topValue"]
+    )
+
+    cadeia = template_response | llm | StrOutputParser()
+
+    response = cadeia.invoke({
+        "question": question,
+        "lowStockQuantity": lowStockQuantity,
+        "lowStockList": lowStockList if lowStockQuantity else "Nenhum produto com estoque baixo.",
+        "criticalQuantity": criticalQuantity,
+        "criticalList": criticalList if criticalQuantity else "Nenhum produto em situação crítica.",
+        "excessQuantity": excessQuantity,
+        "excessList": excessList if excessQuantity else "Nenhum produto identificado com excesso.",
+        "rankingCategories": rankingCategories,
+        "totalStockValue": totalStockValue,
+        "topValue": topValue
+    })
+
+    return response
+
+
 # Function to create the agent tools
 def criar_ferramentas(df):
     dataframeInformationtool = Tool(
@@ -419,6 +516,17 @@ def criar_ferramentas(df):
                     """,
         return_direct=True)
 
+    stockAnalysisTool = Tool(
+        name="Analisar Estoque",
+        func=lambda question: analyzeStock.run({"question": question, "df": df}),
+        description="""
+                    Utilize esta ferramenta sempre que o usuário fizer perguntas sobre a saúde ou situação geral do
+                    estoque, como produtos com estoque baixo, situação crítica, ranking de categorias,
+                    valor total do estoque, produtos de maior valor financeiro ou excesso de estoque.
+                    Não utilize para localizar um produto específico ou para estatísticas descritivas
+                    genéricas de colunas numéricas.
+                    """,
+        return_direct=True)
     
     return [
         dataframeInformationtool,
@@ -426,5 +534,6 @@ def criar_ferramentas(df):
         generateGraphTool,
         pythonCodeTool,
         procedureManualTool,
-        productFindTool
+        productFindTool,
+        stockAnalysisTool
     ]
