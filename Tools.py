@@ -442,7 +442,7 @@ def analyzeStock(question: str, df: pd.DataFrame) -> str:
 
 
 # Function to create the agent tools
-def criar_ferramentas(df):
+def createTools(df):
     dataframeInformationtool = Tool(
         name="Informações Dataframe",
         func=lambda question:dataframeInformaion.run({"question": question, "df": df}),
