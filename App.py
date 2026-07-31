@@ -40,3 +40,46 @@ Você pode:
 
 Ideal para analistas, cientistas de dados e equipes que buscam agilidade e insights rápidos com apoio de IA.
 """)
+
+# ---------------------------------------------------------------------------
+# Data upload: by default uses the project's fixed files, but the user can optionally upload their own files.
+# ---------------------------------------------------------------------------
+standardCsvPath = os.path.join(os.path.dirname(__file__), "InventoryStock.csv")
+standardPdfPath = os.path.join(os.path.dirname(__file__), "WarehouseProceduresManual.pdf")
+folderUploads = os.path.join(os.path.dirname(__file__), "uploadedData", "uploads")
+
+st.markdown("### 📁 Fonte de dados")
+st.caption(
+    "Por padrão, o assistente usa a base de estoque e o manual de procedimentos do CD-01 da LogiInsight. "
+    "Se quiser, você pode enviar seus próprios arquivos para usar no lugar."
+)
+
+with st.expander("➕ Usar meus próprios arquivos (opcional)"):
+    csvSent = st.file_uploader("Base de estoque (CSV)", type="csv", key="uploadCsv")
+    pdfSent = st.file_uploader("Manual de procedimentos (PDF)", type="pdf", key="uploadPdf")
+
+@st.cache_data(show_spinner="Carregando base de estoque...")
+def loadDefaultStock():
+    return pd.read_csv(standardCsvPath)
+
+
+# CSV: uses the one sent by the person, if available; otherwise, uses the project's standard.
+if csvSent is not None:
+    df = pd.read_csv(csvSent)
+    st.success(f"Usando o arquivo enviado: {csvSent.name}")
+else:
+    df = loadDefaultStock()
+
+
+# PDF: uses the one sent by the person, if available; otherwise, uses the project's default.
+if pdfSent is not None:
+    os.makedirs(folderUploads, exist_ok=True)
+    activePdfPath = os.path.join(folderUploads, pdfSent.name)
+    with open(activePdfPath, "wb") as f:
+        f.write(pdfSent.getbuffer())
+    st.success(f"Usando o manual enviado: {pdfSent.name}")
+else:
+    activePdfPath = standardPdfPath
+
+st.markdown("### 🔍 Amostra da base de estoque em uso")
+st.dataframe(df.head())
