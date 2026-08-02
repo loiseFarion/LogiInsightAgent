@@ -141,3 +141,59 @@ promptReactPt = PromptTemplate(
 # Agent
 agent = create_react_agent(llm=llm, tools=tools, prompt=promptReactPt)
 orchestrator = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
+
+
+# FAST ACTIONS
+st.markdown("---")
+st.markdown("## ⚡ Ações rápidas")
+
+# General Information Report
+if st.button("📄 Relatório de informações gerais", key="generalReportButton"):
+    with st.spinner("Gerando relatório 📦"):
+        response = orchestrator.invoke({"input": "Quero um relatório com informações sobre os dados"})
+        st.session_state['generalReport'] = response["output"]
+
+if 'generalReport' in st.session_state:
+    with st.expander("Resultado: Relatório de informações gerais"):
+        st.markdown(st.session_state['generalReport'])
+        st.download_button(
+            label="📥 Baixar relatório",
+            data=st.session_state['generalReport'],
+            file_name="generalInformationReport.md",
+            mime="text/markdown"
+        )
+
+# Descriptive statistics report
+if st.button("📄 Relatório de estatísticas descritivas", key="descriptiveStatisticsButton"):
+    with st.spinner("Gerando relatório 📦"):
+        response = orchestrator.invoke({"input": "Quero um relatório de estatísticas descritivas"})
+        st.session_state['descriptiveStatistics'] = response["output"]
+
+if 'descriptiveStatistics' in st.session_state:
+    with st.expander("Resultado: Relatório de estatísticas descritivas"):
+        st.markdown(st.session_state['descriptiveStatistics'])
+        st.download_button(
+            label="📥 Baixar relatório",
+            data=st.session_state['descriptiveStatistics'],
+            file_name="descriptiveStatisticsReport.md",
+            mime="text/markdown"
+        )
+
+# PERGUNTAS (dados OU procedimentos — o agente decide qual ferramenta usar)
+st.markdown("---")
+st.markdown("## 💬 Pergunte ao assistente")
+st.caption("Pergunte sobre os dados de estoque ou sobre os procedimentos operacionais do manual.")
+userQuestion = st.text_input("Digite sua pergunta (ex: 'Qual é a média do tempo de entrega?', 'Quantos SKUs estão com status Baixo Estoque?' ou 'O que fazer se o código de barras estiver ilegível?')")
+if st.button("Responder pergunta", key="answerQuestion"):
+    with st.spinner("Consultando 📦"):
+        response = orchestrator.invoke({"input": userQuestion})
+        st.markdown(response["output"])
+
+# Generating Charts
+st.markdown("---")
+st.markdown("## 📊 Criar gráfico com base em uma pergunta")
+
+questionGraph = st.text_input("Digite o que deseja visualizar (ex: 'Crie um gráfico da quantidade disponível por categoria')")
+if st.button("Gerar gráfico", key="generateGraph"):
+    with st.spinner("Gerando o gráfico 📦"):
+        orchestrator.invoke({"input": questionGraph})
