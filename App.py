@@ -83,3 +83,58 @@ else:
 
 st.markdown("### 🔍 Amostra da base de estoque em uso")
 st.dataframe(df.head())
+
+# LLM
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+llm = ChatGroq(
+    api_key=GROQ_API_KEY,
+    model_name="llama3-70b-8192",
+    temperature=0
+)
+
+# Tools (CSV + RAG from the PDF manual), already pointing to the files in use.
+tools = createTools(df, activePdfPath)
+
+# Prompt react
+dfHead = df.head().to_markdown()
+
+promptReactPt = PromptTemplate(
+    input_variables=["input", "agentScratchpad", "tools", "toolNames"],
+    partial_variables={"dfHead": dfHead},
+    template="""
+    Você é o assistente virtual do centro de distribuição LogiInsight e sempre responde em português.
+
+    Você tem acesso a duas fontes de informação:
+
+    1. Um dataframe pandas chamado `df` com a base de estoque. Aqui estão as primeiras linhas,
+       obtidas com `df.head().to_markdown()`:
+
+        {df_head}
+
+    2. O Manual de Procedimentos Operacionais do centro de distribuição, consultável através de
+       uma ferramenta própria (Manual de Procedimentos).
+
+    Responda às seguintes perguntas da melhor forma possível.
+
+    Para isso, você tem acesso às seguintes ferramentas:
+
+    {tools}
+
+    Use o seguinte formato:
+
+    Question: a pergunta de entrada que você deve responder
+    Thought: você deve sempre pensar no que fazer
+    Action: a ação a ser tomada, deve ser uma das [{toolNames}]
+    Action Input: a entrada para a ação
+    Observation: o resultado da ação
+    ... (este Thought/Action/Action Input/Observation pode se repetir N vezes)
+    Thought: Agora eu sei a resposta final
+    Final Answer: a resposta final para a pergunta de entrada original.
+    Quando usar a ferramenta pythonCodeTool: formate sua resposta final de forma clara, em lista, com valores separados por vírgulas e duas casas decimais sempre que apresentar números.
+
+    Comece!
+
+    Question: {input}
+    Thought: {agentScratchpad}"""
+)
+
