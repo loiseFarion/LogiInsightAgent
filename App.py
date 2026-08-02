@@ -9,7 +9,7 @@ from Tools import createTools
 
 # Start the app
 st.set_page_config(page_title="Assistente LogiInsight - Assistente de IA do centro de distribuição", layout="centered")
-st.title()
+st.title("Assistente LogiInsight")
 
 # Tool description
 st.info("""
