@@ -138,3 +138,6 @@ promptReactPt = PromptTemplate(
     Thought: {agentScratchpad}"""
 )
 
+# Agent
+agent = create_react_agent(llm=llm, tools=tools, prompt=promptReactPt)
+orchestrator = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
