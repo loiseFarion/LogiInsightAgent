@@ -6,12 +6,18 @@ from langchain.prompts import PromptTemplate
 from langchain.agents import create_react_agent
 from langchain.agents import AgentExecutor
 from Tools import createTools
+from langchain_google_genai import ChatGoogleGenerativeAI
 
+# ---------------------------------------------------------------------------
 # Start the app
-st.set_page_config(page_title="Assistente LogiInsight - Assistente de IA do centro de distribuição", layout="centered")
-st.title("Assistente LogiInsight")
+# ---------------------------------------------------------------------------
 
+st.set_page_config(page_title="Assistente LogiInsight - Assistente de IA do centro de distribuição", layout="centered")
+st.title("📦 Assistente LogiInsight")
+
+# ---------------------------------------------------------------------------
 # Tool description
+# ---------------------------------------------------------------------------
 st.info("""
 Este assistente utiliza um agente de IA, criado com LangChain para responder perguntas sobre a
 operação do Centro de Distribuição CD-01 da LogiInsight, combinando duas fontes de dados internas:
@@ -31,7 +37,7 @@ Você pode:
              
 - 📊 **Criar gráficos automaticamente** com base em perguntas em linguagem natural.
 
-- 📦 **Analisar a saúde geral do estoque**: como"Quais produtos estão com estoque baixo?", "Quantos produtos estão em situação crítica?", "Qual categoria possui mais itens em estoque?", "Qual é o valor total do estoque?", "Existe excesso de estoque?"
+- 📦 **Analisar a saúde geral do estoque**: como "Quais produtos estão com estoque baixo?", "Quantos produtos estão em situação crítica?", "Qual categoria possui mais itens em estoque?", "Qual é o valor total do estoque?", "Existe excesso de estoque?"
 
 - 🔍 **Localizar um produto específico**: como "Quais são os dados do SKU-1020?", "Onde está o produto com EAN 7891234567890?", "Qual é o fornecedor do Protetor Solar?"
 
@@ -42,7 +48,7 @@ Ideal para analistas, cientistas de dados e equipes que buscam agilidade e insig
 """)
 
 # ---------------------------------------------------------------------------
-# Data upload: by default uses the project's fixed files, but the user can optionally upload their own files.
+# Data upload: by default uses the project's fixed files, but the user can optionally upload their own files
 # ---------------------------------------------------------------------------
 standardCsvPath = os.path.join(os.path.dirname(__file__), "InventoryStock.csv")
 standardPdfPath = os.path.join(os.path.dirname(__file__), "WarehouseProceduresManual.pdf")
@@ -62,16 +68,18 @@ with st.expander("➕ Usar meus próprios arquivos (opcional)"):
 def loadDefaultStock():
     return pd.read_csv(standardCsvPath)
 
-
-# CSV: uses the one sent by the person, if available; otherwise, uses the project's standard.
+# ---------------------------------------------------------------------------
+# CSV: uses the one sent by the person, if available; otherwise, uses the project's standard
+# ---------------------------------------------------------------------------
 if csvSent is not None:
     df = pd.read_csv(csvSent)
     st.success(f"Usando o arquivo enviado: {csvSent.name}")
 else:
     df = loadDefaultStock()
 
-
-# PDF: uses the one sent by the person, if available; otherwise, uses the project's default.
+# ---------------------------------------------------------------------------
+# PDF: uses the one sent by the person, if available; otherwise, uses the project's default
+# ---------------------------------------------------------------------------
 if pdfSent is not None:
     os.makedirs(folderUploads, exist_ok=True)
     activePdfPath = os.path.join(folderUploads, pdfSent.name)
@@ -84,22 +92,35 @@ else:
 st.markdown("### 🔍 Amostra da base de estoque em uso")
 st.dataframe(df.head())
 
-# LLM
+# ---------------------------------------------------------------------------
+# LLM could be Google API key, Groq, or another of your preference
+# ---------------------------------------------------------------------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 llm = ChatGroq(
     api_key=GROQ_API_KEY,
-    model_name="llama3-70b-8192",
-    temperature=0
+    model_name="llama-3.3-70b-versatile",
+    temperature=0)
+"""
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+llm = ChatGoogleGenerativeAI(
+    model="gemini-3.6-flash",
+    google_api_key=GEMINI_API_KEY,
+    temperature=0,
 )
+"""
 
-# Tools (CSV + RAG from the PDF manual), already pointing to the files in use.
+# ---------------------------------------------------------------------------
+# Tools (CSV + RAG from the PDF manual), already pointing to the files in use
+# ---------------------------------------------------------------------------
 tools = createTools(df, activePdfPath)
 
+# ---------------------------------------------------------------------------
 # Prompt react
+# ---------------------------------------------------------------------------
 dfHead = df.head().to_markdown()
 
 promptReactPt = PromptTemplate(
-    input_variables=["input", "agentScratchpad", "tools", "toolNames"],
+    input_variables=["input", "agent_scratchpad", "tools", "tool_names"],
     partial_variables={"dfHead": dfHead},
     template="""
     Você é o assistente virtual do centro de distribuição LogiInsight e sempre responde em português.
@@ -109,7 +130,7 @@ promptReactPt = PromptTemplate(
     1. Um dataframe pandas chamado `df` com a base de estoque. Aqui estão as primeiras linhas,
        obtidas com `df.head().to_markdown()`:
 
-        {df_head}
+        {dfHead}
 
     2. O Manual de Procedimentos Operacionais do centro de distribuição, consultável através de
        uma ferramenta própria (Manual de Procedimentos).
@@ -124,7 +145,7 @@ promptReactPt = PromptTemplate(
 
     Question: a pergunta de entrada que você deve responder
     Thought: você deve sempre pensar no que fazer
-    Action: a ação a ser tomada, deve ser uma das [{toolNames}]
+    Action: a ação a ser tomada, deve ser uma das [{tool_names}]
     Action Input: a entrada para a ação
     Observation: o resultado da ação
     ... (este Thought/Action/Action Input/Observation pode se repetir N vezes)
@@ -135,15 +156,18 @@ promptReactPt = PromptTemplate(
     Comece!
 
     Question: {input}
-    Thought: {agentScratchpad}"""
+    Thought: {agent_scratchpad}"""
 )
 
-# Agent
+# ---------------------------------------------------------------------------
+# Agent and orchestrator: the agent is created with the LLM, tools, and prompt, the orchestrator executes the agent and handles errors
+# ---------------------------------------------------------------------------
 agent = create_react_agent(llm=llm, tools=tools, prompt=promptReactPt)
 orchestrator = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
 
-
-# FAST ACTIONS
+# ---------------------------------------------------------------------------
+# Fast actions
+# ---------------------------------------------------------------------------
 st.markdown("---")
 st.markdown("## ⚡ Ações rápidas")
 
@@ -179,11 +203,11 @@ if 'descriptiveStatistics' in st.session_state:
             mime="text/markdown"
         )
 
-# PERGUNTAS (dados OU procedimentos — o agente decide qual ferramenta usar)
+# Questions (data, procedures, or calculations; the agent decides which tool to use)
 st.markdown("---")
 st.markdown("## 💬 Pergunte ao assistente")
-st.caption("Pergunte sobre os dados de estoque ou sobre os procedimentos operacionais do manual.")
-userQuestion = st.text_input("Digite sua pergunta (ex: 'Qual é a média do tempo de entrega?', 'Quantos SKUs estão com status Baixo Estoque?' ou 'O que fazer se o código de barras estiver ilegível?')")
+st.caption("Pergunte sobre os dados de estoque, cálculos ou sobre os procedimentos operacionais do manual.")
+userQuestion = st.text_input("Digite sua pergunta (ex: 'Qual a média de produtos no estoque?', 'Quantos SKUs estão com status Baixo Estoque?' ou 'O que fazer se o código de barras estiver ilegível?')")
 if st.button("Responder pergunta", key="answerQuestion"):
     with st.spinner("Consultando 📦"):
         response = orchestrator.invoke({"input": userQuestion})
@@ -192,7 +216,6 @@ if st.button("Responder pergunta", key="answerQuestion"):
 # Generating Charts
 st.markdown("---")
 st.markdown("## 📊 Criar gráfico com base em uma pergunta")
-
 questionGraph = st.text_input("Digite o que deseja visualizar (ex: 'Crie um gráfico da quantidade disponível por categoria')")
 if st.button("Gerar gráfico", key="generateGraph"):
     with st.spinner("Gerando o gráfico 📦"):
