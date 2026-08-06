@@ -162,7 +162,7 @@ promptReactPt = PromptTemplate(
 # Agent and orchestrator: the agent is created with the LLM, tools, and prompt, the orchestrator executes the agent and handles errors
 # ---------------------------------------------------------------------------
 agent = create_react_agent(llm=llm, tools=tools, prompt=promptReactPt)
-orchestrator = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
+orchestrator = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True,return_intermediate_steps=True)
 
 # ---------------------------------------------------------------------------
 # Fast actions
@@ -219,10 +219,8 @@ questionGraph = st.text_input("Digite o que deseja visualizar (ex: 'Crie um grá
 if st.button("Gerar gráfico", key="generateGraph"):
     with st.spinner("Gerando o gráfico 📦"):
         response = orchestrator.invoke({"input": questionGraph})
-        agentUsed = response.get("agent") or response.get("output_agent")
-        if agentUsed != "chartGenerator":
+        agentUsed = [step[0].tool for step in response.get("intermediate_steps", [])]
+        if "Gerar Gráfico" not in agentUsed:
             st.warning("⚠️ Essa pergunta não é sobre geração de gráficos. Por favor, "
                        "faça esse tipo de pergunta no campo **Pergunte ao assistente**, "
                        "e use este campo apenas para pedidos de gráficos.")
-        else:
-            st.success("Gráfico gerado com sucesso!")
