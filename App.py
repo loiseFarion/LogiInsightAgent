@@ -218,4 +218,11 @@ st.markdown("## 📊 Criar gráfico com base em uma pergunta")
 questionGraph = st.text_input("Digite o que deseja visualizar (ex: 'Crie um gráfico da quantidade disponível por categoria')")
 if st.button("Gerar gráfico", key="generateGraph"):
     with st.spinner("Gerando o gráfico 📦"):
-        orchestrator.invoke({"input": questionGraph})
+        response = orchestrator.invoke({"input": questionGraph})
+        agentUsed = response.get("agent") or response.get("output_agent")
+        if agentUsed != "chartGenerator":
+            st.warning("⚠️ Essa pergunta não é sobre geração de gráficos. Por favor, "
+                       "faça esse tipo de pergunta no campo **Pergunte ao assistente**, "
+                       "e use este campo apenas para pedidos de gráficos.")
+        else:
+            st.success("Gráfico gerado com sucesso!")
