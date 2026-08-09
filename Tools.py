@@ -21,17 +21,17 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 # ---------------------------------------------------------------------------
 # Load the Groq API key
 # ---------------------------------------------------------------------------
+"""
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 llm = ChatGroq(
     api_key=GROQ_API_KEY,
     model_name="llama-3.3-70b-versatile",
     temperature=0)
-
+"""
 # ---------------------------------------------------------------------------
 # Load the Gemini API key
 # ---------------------------------------------------------------------------
-"""
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 llm = ChatGoogleGenerativeAI(
@@ -39,7 +39,6 @@ llm = ChatGoogleGenerativeAI(
     google_api_key=GEMINI_API_KEY,
     temperature=0,
 )
-"""
 
 WhDocumentPath = os.path.join(os.path.dirname(__file__), "InventoryStock", "WarehouseProceduresManual.pdf")
 
@@ -376,7 +375,11 @@ def loadManualProcedureBase(WhDocumentPath: str = WhDocumentPath):
     chunks = splitter.split_documents(pages)
 
     # Local embeddings using Ollama
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    #embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    embeddings = OllamaEmbeddings(
+        model="nomic-embed-text",
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    )
     vectorstore = FAISS.from_documents(chunks,embeddings)
     return vectorstore
 
