@@ -95,18 +95,18 @@ st.dataframe(df.head())
 # ---------------------------------------------------------------------------
 # LLM could be Google API key, Groq, or another of your preference
 # ---------------------------------------------------------------------------
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-llm = ChatGroq(
-    api_key=GROQ_API_KEY,
-    model_name="llama-3.3-70b-versatile",
-    temperature=0)
+#GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+#llm = ChatGroq(
+#    api_key=GROQ_API_KEY,
+#    model_name="llama-3.3-70b-versatile",
+#    temperature=0)
 
-# GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# llm = ChatGoogleGenerativeAI(
-# model="gemini-3.6-flash",
-# google_api_key=GEMINI_API_KEY,
-#     temperature=0,
-# )
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+llm = ChatGoogleGenerativeAI(
+model="gemini-3.6-flash",
+google_api_key=GEMINI_API_KEY,
+temperature=0,
+)
 
 # ---------------------------------------------------------------------------
 # Tools (CSV + RAG from the PDF manual), already pointing to the files in use
