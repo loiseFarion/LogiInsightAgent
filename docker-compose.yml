@@ -1,0 +1,32 @@
+# Version of Docker Compose file format
+version: "3.9" 
+
+services:
+  # Service responsible for running Ollama and making AI models available
+  ollama:
+    image: ollama/ollama:latest
+    # Persistent volume for storing downloaded templates
+    volumes:
+      - ollama_data:/root/.ollama
+    # Map port 11434 from the container to port 11434 on theh machine/VM
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  # LogiInsight application service
+  app:
+    # Builds the image using the Dockerfile
+    build: .
+    # Initializes the Ollama service before the application
+    depends_on:
+      - ollama
+    # Environment variables
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
